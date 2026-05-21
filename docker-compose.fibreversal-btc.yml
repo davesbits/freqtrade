@@ -1,0 +1,16 @@
+---
+services:
+  freqtrade-fibreversal-btc:
+    image: freqtradeorg/freqtrade:stable
+    restart: unless-stopped
+    container_name: freqtrade-fibreversal-btc
+    volumes:
+      - "./user_data:/freqtrade/user_data"
+    ports:
+      - "127.0.0.1:8082:8082"
+    command: >
+      trade
+      --logfile /freqtrade/user_data/logs/freqtrade-fibreversal-btc.log
+      --db-url sqlite:////freqtrade/user_data/trades-fibreversal-btc.sqlite
+      --config /freqtrade/user_data/config_fibreversal_btc.json
+      --strategy FibReversal_1h

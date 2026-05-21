@@ -1,0 +1,15 @@
+services:
+  freqtrade-srtrend-btc-futures:
+    image: freqtradeorg/freqtrade:stable
+    restart: unless-stopped
+    container_name: freqtrade-srtrend-btc-futures
+    volumes:
+      - "./user_data:/freqtrade/user_data"
+    ports:
+      - "127.0.0.1:8087:8087"
+    command: >
+      trade
+      --logfile /freqtrade/user_data/logs/freqtrade-srtrend-btc-futures.log
+      --db-url sqlite:////freqtrade/user_data/trades-srtrend-btc-futures.sqlite
+      --config /freqtrade/user_data/config_sr_volume_15m_btc_futures.json
+      --strategy VolumeSrTrendReversalHyperopt

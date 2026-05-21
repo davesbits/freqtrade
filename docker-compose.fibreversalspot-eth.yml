@@ -1,0 +1,13 @@
+services:
+  freqtrade-fibreversalspot-eth:
+    image: freqtradeorg/freqtrade:stable
+    container_name: freqtrade-fibreversalspot-eth
+    restart: unless-stopped
+    ports:
+      - "8096:8096"
+    volumes:
+      - ./:/freqtrade
+    command: >
+      trade
+      --config /freqtrade/user_data/config_fibreversal_eth_spot.json
+      --strategy FibReversalSpot_1h

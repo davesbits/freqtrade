@@ -1,0 +1,13 @@
+services:
+  freqtrade-fibreversalspot-btc:
+    image: freqtradeorg/freqtrade:stable
+    container_name: freqtrade-fibreversalspot-btc
+    restart: unless-stopped
+    ports:
+      - "8095:8095"
+    volumes:
+      - ./:/freqtrade
+    command: >
+      trade
+      --config /freqtrade/user_data/config_fibreversal_btc_spot.json
+      --strategy FibReversalSpot_1h

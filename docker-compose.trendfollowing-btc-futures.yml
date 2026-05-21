@@ -1,0 +1,15 @@
+services:
+  freqtrade-trendfollowing-btc-futures:
+    image: freqtradeorg/freqtrade:stable
+    restart: unless-stopped
+    container_name: freqtrade-trendfollowing-btc-futures
+    volumes:
+      - "./user_data:/freqtrade/user_data"
+    ports:
+      - "127.0.0.1:8089:8089"
+    command: >
+      trade
+      --logfile /freqtrade/user_data/logs/freqtrade-trendfollowing-btc-futures.log
+      --db-url sqlite:////freqtrade/user_data/trades-trendfollowing-btc-futures.sqlite
+      --config /freqtrade/user_data/config_trendfollowing_btc_futures.json
+      --strategy TrendFollowingStrategy

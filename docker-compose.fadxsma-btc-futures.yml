@@ -1,0 +1,15 @@
+services:
+  freqtrade-fadxsma-btc-futures:
+    image: freqtradeorg/freqtrade:stable
+    restart: unless-stopped
+    container_name: freqtrade-fadxsma-btc-futures
+    volumes:
+      - "./user_data:/freqtrade/user_data"
+    ports:
+      - "127.0.0.1:8088:8088"
+    command: >
+      trade
+      --logfile /freqtrade/user_data/logs/freqtrade-fadxsma-btc-futures.log
+      --db-url sqlite:////freqtrade/user_data/trades-fadxsma-btc-futures.sqlite
+      --config /freqtrade/user_data/config_fadxsma_btc_futures.json
+      --strategy FAdxSmaStrategy
