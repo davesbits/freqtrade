@@ -1,0 +1,13 @@
+services:
+  freqtrade-fibreversalspot-eth-15m-trend-freqai:
+    image: freqtradeorg/freqtrade:stable_freqai
+    container_name: freqtrade-fibreversalspot-eth-15m-trend-freqai
+    restart: unless-stopped
+    volumes:
+      - ./:/freqtrade
+    command: >
+      trade
+      --config /freqtrade/user_data/config_fibreversal_eth_spot_15m_trend_freqai.json
+      --strategy FibReversalSpot_15m_Trend_FreqAI
+      --freqaimodel LightGBMRegressor
+      --db-url sqlite:////freqtrade/user_data/trades-fibreversalspot-eth-15m-trend-freqai.sqlite
