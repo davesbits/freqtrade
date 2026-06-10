@@ -1,10 +1,15 @@
 services:
   freqtrade-fibreversalspot-eth-15m-trend:
-    image: freqtradeorg/freqtrade:stable
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: freqtrade-fibreversalspot-eth-15m-trend:local
     container_name: freqtrade-fibreversalspot-eth-15m-trend
     restart: unless-stopped
+    ports:
+      - "8099:8099"
     volumes:
-      - ./:/freqtrade
+      - ./user_data:/freqtrade/user_data
     command: >
       trade
       --config /freqtrade/user_data/config_fibreversal_eth_spot_15m_trend.json

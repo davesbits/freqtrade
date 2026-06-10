@@ -1,0 +1,17 @@
+services:
+  freqtrade-openclaw-btc-rejection-ladder-dry-test-b:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: freqtrade-openclaw-btc-rejection-ladder-dry-test-b:local
+    container_name: freqtrade-openclaw-btc-rejection-ladder-dry-test-b
+    restart: unless-stopped
+    ports:
+      - "8102:8102"
+    volumes:
+      - ./user_data:/freqtrade/user_data
+    command: >
+      trade
+      --config /freqtrade/user_data/config_openclaw-btc-rejection-ladder-dry-test-b.json
+      --strategy OpenClawBtcRejectionLadderDryTestB
+      --db-url sqlite:////freqtrade/user_data/trades-openclaw-btc-rejection-ladder-dry-test-b.sqlite

@@ -1,0 +1,22 @@
+version: '3.8'
+services:
+  freqtrade-openclaw-eth-sr-trend-15m:
+    image: freqtrade-local:postgres
+    container_name: freqtrade-openclaw-eth-sr-trend-15m
+    ports:
+      - "8132:8132"
+    volumes:
+      - ./user_data:/freqtrade/user_data
+    command: >
+      trade
+      --config /freqtrade/user_data/config_openclaw-eth-sr-trend-15m.json
+      --strategy OpenClawBtcSrTrend15m
+      --db-url sqlite:////freqtrade/user_data/trades-openclaw-eth-sr-trend-15m.sqlite
+      --dry-run
+    restart: unless-stopped
+    stop_grace_period: 2m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"

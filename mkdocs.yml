@@ -42,6 +42,7 @@ nav:
         - Backtest analysis: advanced-backtesting.md
     - Advanced Topics:
         - Advanced Post-installation Tasks: advanced-setup.md
+        - Local Bot Regime Automation: bot-regime-automation.md
         - Trade Object: trade-object.md
         - Lookahead analysis: lookahead-analysis.md
         - Recursive analysis: recursive-analysis.md

@@ -1,0 +1,27 @@
+services:
+  freqtrade-openclaw-liquidity-workflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: freqtrade-openclaw-liquidity-workflow:local
+    container_name: freqtrade-openclaw-liquidity-workflow
+    restart: unless-stopped
+    user: "0:0"
+    working_dir: /freqtrade
+    volumes:
+      - ./:/freqtrade
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - TIMERANGE=20250101-20260520
+      - EPOCHS=500
+      - MIN_TRADES=200
+      - JOB_WORKERS=1
+      - MIN_DELTA_PCT=0.10
+      - MAX_DD_PCT=12.0
+      - CYCLE_SECONDS=21600
+      - RUN_ONCE=0
+      - RUNTIME_IMAGE=freqtrade-openclaw-liquidity-scalper:local
+      - PY_BIN=python
+      - PYTHONPATH=/home/ftuser/.local/lib/python3.14/site-packages:/freqtrade
+    entrypoint: ["/bin/bash", "-lc"]
+    command: "scripts/liquidity_hyperopt_workflow.sh"

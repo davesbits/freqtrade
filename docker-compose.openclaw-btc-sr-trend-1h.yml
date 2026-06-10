@@ -1,0 +1,17 @@
+services:
+  freqtrade-openclaw-btc-sr-trend-1h:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: freqtrade-local:postgres
+    container_name: freqtrade-openclaw-btc-sr-trend-1h
+    restart: unless-stopped
+    ports:
+      - "8112:8112"
+    volumes:
+      - ./user_data:/freqtrade/user_data
+    command: >
+      trade
+      --config /freqtrade/user_data/config_openclaw-btc-sr-trend-1h.json
+      --strategy OpenClawBtcSrTrend1h
+      --db-url postgresql://bits:4642@host.docker.internal:5432/freqtrade_sr_trend_1h

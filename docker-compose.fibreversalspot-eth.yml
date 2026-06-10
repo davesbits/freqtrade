@@ -1,12 +1,15 @@
 services:
   freqtrade-fibreversalspot-eth:
-    image: freqtradeorg/freqtrade:stable
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: freqtrade-fibreversalspot-eth:local
     container_name: freqtrade-fibreversalspot-eth
     restart: unless-stopped
     ports:
       - "8096:8096"
     volumes:
-      - ./:/freqtrade
+      - ./user_data:/freqtrade/user_data
     command: >
       trade
       --config /freqtrade/user_data/config_fibreversal_eth_spot.json

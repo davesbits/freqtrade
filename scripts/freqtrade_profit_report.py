@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
 """
-Print a markdown-style profit/performance summary for all running Freqtrade bots.
+Print a markdown-style profit/performance summary for all known Freqtrade bots.
 
+This report is results-focused. Health checks live in a separate script.
 The script:
 - reads `user_data/bots_registry.json` for the bot -> config mapping,
 - checks which `freqtrade*` containers are actually running,
-- logs into each bot's REST API,
+- logs into each running bot's REST API,
 - fetches `/profit` or `/profit_all`,
 - fetches `/performance`,
-- prints the key P/L and percentage stats in one terminal view.
+- prints the key P/L and percentage stats in one terminal view,
+- keeps going if a bot is stopped or a request fails.
 """
 
 from __future__ import annotations
 
+import argparse
 import base64
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -25,6 +29,7 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = ROOT / "user_data" / "bots_registry.json"
+API_TIMEOUT_SECONDS = float(os.getenv("FREQTRADE_API_TIMEOUT_SECONDS", "3"))
 
 
 def load_json(path: Path) -> dict:
@@ -75,14 +80,8 @@ def http_json(url: str, method: str = "GET", username: str | None = None, passwo
     if payload is not None:
         request.data = payload
 
-    with urllib.request.urlopen(request, timeout=15) as response:
+    with urllib.request.urlopen(request, timeout=API_TIMEOUT_SECONDS) as response:
         return json.loads(response.read().decode("utf-8"))
-
-
-def fetch_health(base_url: str, username: str | None = None, password: str | None = None) -> dict:
-    ping = http_json(f"{base_url}/ping", username=username, password=password)
-    health = http_json(f"{base_url}/health", username=username, password=password)
-    return {"ping": ping, "health": health}
 
 
 def fetch_bot_summary(base_url: str, trading_mode: str, username: str | None = None, password: str | None = None) -> dict:
@@ -106,14 +105,21 @@ def fmt_pct(value) -> str:
         return "n/a"
 
 
-def parse_args() -> bool:
-    return "--summary-only" in sys.argv[1:]
-
-
-def parse_report_mode() -> str:
-    if "--ranked" in sys.argv[1:]:
-        return "ranked"
-    return "detailed"
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Freqtrade profit/performance report")
+    parser.add_argument("--summary-only", action="store_true", help="Skip top-pairs tables.")
+    parser.add_argument("--ranked", action="store_true", help="Print one ranked table instead of per-bot sections.")
+    parser.add_argument(
+        "--running-only",
+        action="store_true",
+        help="Include only currently running containers.",
+    )
+    parser.add_argument(
+        "--bots",
+        default="",
+        help="Comma-separated bot names to include.",
+    )
+    return parser.parse_args()
 
 
 def md_escape(value) -> str:
@@ -148,35 +154,13 @@ def top_pairs(performance: list[dict], quote_currency: str, limit: int = 5) -> l
     return rows
 
 
-def print_bot_header(name: str, port: int, trading_mode: str, strategy: str, endpoint: str) -> None:
+def print_bot_header(name: str, port: int | str, trading_mode: str, strategy: str, endpoint: str, status: str) -> None:
     print(f"## {name}")
     print(f"- port: `{port}`")
     print(f"- mode: `{trading_mode}`")
     print(f"- strategy: `{strategy}`")
+    print(f"- status: `{status}`")
     print(f"- endpoint: `/{endpoint}`")
-    print()
-
-
-def print_health_section(health: dict) -> None:
-    ping = health.get("ping", {})
-    last_process = health.get("health", {})
-    md_table(
-        ["Check", "Status", "Last Process", "Last Process TS"],
-        [
-            [
-                "ping",
-                md_escape(ping.get("status", "n/a")),
-                "-",
-                "-",
-            ],
-            [
-                "health",
-                "ok" if last_process.get("last_process") is not None or last_process.get("last_process_ts") is not None else "idle",
-                md_escape(last_process.get("last_process", "")) if last_process.get("last_process") is not None else "-",
-                md_escape(last_process.get("last_process_ts", "")) if last_process.get("last_process_ts") is not None else "-",
-            ],
-        ],
-    )
     print()
 
 
@@ -240,12 +224,20 @@ def print_futures_summary(summary: dict, performance: list[dict], quote_currency
 
 def make_rank_row(
     name: str,
+    status: str,
     trading_mode: str,
     quote_currency: str,
     endpoint: str,
-    summary: dict,
+    summary: dict | None,
+    error: str = "",
 ) -> list[str]:
-    if endpoint == "profit_all":
+    if summary is None:
+        all_profit = "n/a"
+        all_pct = "n/a"
+        trades = "n/a"
+        winrate = "n/a"
+        best_pair = "n/a"
+    elif endpoint == "profit_all":
         bucket = summary.get("all", {})
         all_profit = fmt_money(bucket.get("profit_all_coin"), quote_currency)
         all_pct = fmt_pct(bucket.get("profit_all_percent"))
@@ -261,6 +253,7 @@ def make_rank_row(
 
     return [
         name,
+        status,
         trading_mode,
         all_profit,
         all_pct,
@@ -268,12 +261,25 @@ def make_rank_row(
         winrate,
         best_pair,
         endpoint,
+        error,
     ]
 
 
+def status_sort_key(row: list[str]) -> tuple[int, float, str]:
+    status = row[1]
+    pct_text = row[4]
+    try:
+        pct_value = float(pct_text.replace("%", ""))
+    except ValueError:
+        pct_value = float("-inf")
+    rank = 0 if status == "running" else 1 if status == "stopped" else 2
+    return (rank, -pct_value, row[0])
+
+
 def main() -> int:
-    summary_only = parse_args()
-    report_mode = parse_report_mode()
+    args = parse_args()
+    summary_only = args.summary_only
+    report_mode = "ranked" if args.ranked else "detailed"
 
     if not REGISTRY_PATH.is_file():
         print(f"error: missing registry file: {REGISTRY_PATH}", file=sys.stderr)
@@ -282,21 +288,42 @@ def main() -> int:
     registry = load_json(REGISTRY_PATH)
     running = running_containers(registry)
     bots = registry.get("bots", [])
+    if args.bots.strip():
+        wanted = {name.strip() for name in args.bots.split(",") if name.strip()}
+        bots = [bot for bot in bots if bot.get("name") in wanted]
+    if args.running_only:
+        bots = [bot for bot in bots if bot.get("name") in running]
 
-    if not running:
-        print("No running freqtrade containers found.")
-        return 0
-
-    matched = 0
     rank_rows: list[list[str]] = []
     for bot in bots:
         name = bot.get("name")
-        if name not in running:
-            continue
+        status = "running" if name in running else str(bot.get("status", "stopped")).lower() or "stopped"
 
         config_path = ROOT / bot.get("config", "")
         if not config_path.is_file():
-            print(f"{name}: missing config {config_path}")
+            rank_rows.append(
+                make_rank_row(
+                    name=name,
+                    status="error",
+                    trading_mode=str(bot.get("mode", "")).lower() or "spot",
+                    quote_currency="USDT",
+                    endpoint="n/a",
+                    summary=None,
+                    error=f"missing config {config_path}",
+                )
+            )
+            if report_mode != "ranked":
+                print("=" * 80)
+                print_bot_header(
+                    name=name,
+                    port=bot.get("port", "n/a"),
+                    trading_mode=str(bot.get("mode", "")).lower() or "spot",
+                    strategy=str(bot.get("strategy", "")),
+                    endpoint="n/a",
+                    status="error",
+                )
+                print(f"error: missing config {config_path}")
+                print()
             continue
 
         config = load_json(config_path)
@@ -305,7 +332,29 @@ def main() -> int:
         password = api_server.get("password") or ""
         port = api_server.get("listen_port") or bot.get("port")
         if not port:
-            print(f"{name}: missing api_server.listen_port")
+            rank_rows.append(
+                make_rank_row(
+                    name=name,
+                    status="error",
+                    trading_mode=str(bot.get("mode", "")).lower() or "spot",
+                    quote_currency=str(config.get("stake_currency", "USDT")),
+                    endpoint="n/a",
+                    summary=None,
+                    error="missing api_server.listen_port",
+                )
+            )
+            if report_mode != "ranked":
+                print("=" * 80)
+                print_bot_header(
+                    name=name,
+                    port="n/a",
+                    trading_mode=str(bot.get("mode", "")).lower() or "spot",
+                    strategy=str(config.get("strategy", bot.get("strategy", ""))),
+                    endpoint="n/a",
+                    status="error",
+                )
+                print("error: missing api_server.listen_port")
+                print()
             continue
 
         trading_mode = bot.get("mode", "").lower()
@@ -315,24 +364,96 @@ def main() -> int:
             trading_mode = "spot"
 
         quote_currency = config.get("stake_currency", "USDT")
+        endpoint = "profit_all" if trading_mode == "futures" else "profit"
+
+        if status != "running":
+            rank_rows.append(
+                make_rank_row(
+                    name=name,
+                    status="stopped",
+                    trading_mode=trading_mode,
+                    quote_currency=quote_currency,
+                    endpoint=endpoint,
+                    summary=None,
+                    error="not running",
+                )
+            )
+            if report_mode != "ranked":
+                print("=" * 80)
+                print_bot_header(
+                    name=name,
+                    port=port,
+                    trading_mode=trading_mode,
+                    strategy=str(config.get("strategy", bot.get("strategy", ""))),
+                    endpoint=endpoint,
+                    status="stopped",
+                )
+                print()
+            continue
+
         base_url = f"http://127.0.0.1:{port}/api/v1"
 
         try:
-            health = fetch_health(base_url, username=username, password=password)
             payload = fetch_bot_summary(base_url, trading_mode, username=username, password=password)
         except urllib.error.HTTPError as exc:
-            print(f"{name}: HTTP {exc.code} calling {base_url}: {exc.reason}")
+            error = f"HTTP {exc.code} calling {base_url}: {exc.reason}"
+            rank_rows.append(
+                make_rank_row(
+                    name=name,
+                    status="error",
+                    trading_mode=trading_mode,
+                    quote_currency=quote_currency,
+                    endpoint=endpoint,
+                    summary=None,
+                    error=error,
+                )
+            )
+            if report_mode != "ranked":
+                print("=" * 80)
+                print_bot_header(
+                    name=name,
+                    port=port,
+                    trading_mode=trading_mode,
+                    strategy=str(config.get("strategy", bot.get("strategy", ""))),
+                    endpoint=endpoint,
+                    status="error",
+                )
+                print(f"error: {error}")
+                print()
             continue
         except Exception as exc:
-            print(f"{name}: {exc}")
+            error = str(exc)
+            rank_rows.append(
+                make_rank_row(
+                    name=name,
+                    status="error",
+                    trading_mode=trading_mode,
+                    quote_currency=quote_currency,
+                    endpoint=endpoint,
+                    summary=None,
+                    error=error,
+                )
+            )
+            if report_mode != "ranked":
+                print("=" * 80)
+                print_bot_header(
+                    name=name,
+                    port=port,
+                    trading_mode=trading_mode,
+                    strategy=str(config.get("strategy", bot.get("strategy", ""))),
+                    endpoint=endpoint,
+                    status="error",
+                )
+                print(f"error: {error}")
+                print()
             continue
 
-        matched += 1
         summary = payload["summary"]
         performance = payload["performance"]
         rank_rows.append(
             make_rank_row(
                 name=name,
+                status=status,
                 trading_mode=trading_mode,
                 quote_currency=quote_currency,
                 endpoint=payload["endpoint"],
@@ -348,27 +469,18 @@ def main() -> int:
                 trading_mode=trading_mode,
                 strategy=config.get("strategy", bot.get("strategy", "")),
                 endpoint=payload["endpoint"],
+                status=status,
             )
-            print("### Health")
-            print_health_section(health)
             if payload["endpoint"] == "profit_all" and isinstance(summary, dict):
                 print_futures_summary(summary, performance, quote_currency, summary_only=summary_only)
             else:
                 print_spot_summary(summary, performance, quote_currency, summary_only=summary_only)
 
-    if matched == 0:
-        print("No matching running freqtrade bots found in the registry.")
-        return 1
-
     if report_mode == "ranked":
         print("## Ranked Bots")
         md_table(
-            ["Bot", "Mode", "P/L", "P/L %", "Trades", "Winrate", "Best Pair", "Endpoint"],
-            sorted(
-                rank_rows,
-                key=lambda row: float(row[3].replace("%", "").replace("n/a", "0") or 0),
-                reverse=True,
-            ),
+            ["Bot", "Status", "Mode", "P/L", "P/L %", "Trades", "Winrate", "Best Pair", "Endpoint", "Error"],
+            sorted(rank_rows, key=status_sort_key),
         )
 
     return 0

@@ -254,6 +254,22 @@ def build_actions(
         )
 
     for container in sorted((managed & running) - desired):
+        spec = bot_specs.get(container, {})
+        start_spec = spec.get("start", {})
+        if start_spec.get("type") == "compose":
+            compose_file = start_spec.get("file")
+            service = start_spec.get("service") or container
+            if compose_file:
+                cmd = ["docker", "compose", "-f", str(ROOT / compose_file), "down", service]
+                actions.append(
+                    Action(
+                        kind="compose_down",
+                        container=container,
+                        reason=f"deactivate for {target_regime}",
+                        command=cmd,
+                    )
+                )
+                continue
         actions.append(
             Action(
                 kind="stop",

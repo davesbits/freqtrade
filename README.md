@@ -67,6 +67,9 @@ We invite you to read the bot documentation to ensure you understand how the bot
 
 Please find the complete documentation on the [freqtrade website](https://www.freqtrade.io).
 
+For the local bear/bull regime-switching workflow and the registry-backed reporting scripts, see [Local Bot Regime Automation](docs/bot-regime-automation.md).
+For the OpenClaw TA-first orchestration workflow, see [TA-First OpenClaw Orchestration](docs/ta-first-openclaw-orchestration.md).
+
 ## Features
 
 - [x] **Based on Python 3.11+**: For botting on any operating system - Windows, macOS and Linux.

@@ -1,0 +1,17 @@
+services:
+  freqtrade-openclaw-liquidity-scalper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: freqtrade-local:postgres
+    container_name: freqtrade-openclaw-liquidity-scalper
+    restart: unless-stopped
+    ports:
+      - "8115:8115"
+    volumes:
+      - ./user_data:/freqtrade/user_data
+    command: >
+      trade
+      --config /freqtrade/user_data/config_openclaw-liquidity-scalper.json
+      --strategy LiquiditySweepScalper
+      --db-url postgresql://bits:4642@host.docker.internal:5432/freqtrade_liquidity_scalper
